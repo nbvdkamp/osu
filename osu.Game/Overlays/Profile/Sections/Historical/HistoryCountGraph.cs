@@ -28,7 +28,7 @@ namespace osu.Game.Overlays.Profile.Sections.Historical
         private readonly HistoryCountLineGraph graph;
         private readonly OsuSpriteText placeholder;
 
-        private KeyValuePair<int, User.UserHistoryCount>[] values;
+        private List<User.UserHistoryCount> values;
         private int hoveredIndex;
         public readonly Bindable<User.UserHistoryCount[]> HistoryCounts = new Bindable<User.UserHistoryCount[]>();
 
@@ -83,22 +83,48 @@ namespace osu.Game.Overlays.Profile.Sections.Historical
                 return;
             }
 
-            values = counts.Select((x, index) => new KeyValuePair<int, User.UserHistoryCount>(index, x)).ToArray();
+            values = counts.ToList();
+            int toSkip = 0;
+            
+            // Add months with no values for display
+            for (int i = 0; i < values.Count; i++)
+            {
+                i += toSkip;
+                if (i == values.Count - 1)
+                    break;
 
-            if (values.Length > 1)
+                DateTime first = values[i].Date;
+                DateTime second = values[i + 1].Date;
+
+                List<User.UserHistoryCount> toInsert = new List<User.UserHistoryCount>();
+
+                for (int j = 1; DateTime.Compare(first.AddMonths(j), second) < 0; j++)
+                {
+                   toInsert.Add(new User.UserHistoryCount 
+                   {
+                       Date = first.AddMonths(j),
+                       Count = 0,
+                   });
+                }
+
+                values.InsertRange(i + 1, toInsert);
+                toSkip = toInsert.Count;
+            }
+
+            if (values.Count > 1)
             {
                 placeholder.FadeOut(fade_duration, Easing.Out);
 
-                graph.DefaultValueCount = values.Length;
-                graph.Values = values.Select(x => (float) x.Value.Count);
+                graph.DefaultValueCount = values.Count;
+                graph.Values = values.Select(x => (float) x.Count);
             }
 
-            graph.FadeTo(values.Length > 1 ? 1 : 0, fade_duration, Easing.Out);
+            graph.FadeTo(values.Count > 1 ? 1 : 0, fade_duration, Easing.Out);
         }
 
         protected override bool OnHover(HoverEvent e)
         {
-            if (values?.Length > 1)
+            if (values?.Count > 1)
             {
                 graph.UpdateBallPosition(e.MousePosition.X);
                 graph.ShowBar();
@@ -109,7 +135,7 @@ namespace osu.Game.Overlays.Profile.Sections.Historical
 
         protected override bool OnMouseMove(MouseMoveEvent e)
         {
-            if (values?.Length > 1)
+            if (values?.Count > 1)
                 graph.UpdateBallPosition(e.MousePosition.X);
 
             return base.OnMouseMove(e);
@@ -117,7 +143,7 @@ namespace osu.Game.Overlays.Profile.Sections.Historical
 
         protected override void OnHoverLost(HoverLostEvent e)
         {
-            if (values?.Length > 1)
+            if (values?.Count > 1)
             {
                 graph.HideBar();
             }
@@ -204,7 +230,7 @@ namespace osu.Game.Overlays.Profile.Sections.Historical
                 if (HistoryCounts.Value == null)
                     return null;
 
-                User.UserHistoryCount value = values[hoveredIndex].Value;
+                User.UserHistoryCount value = values[hoveredIndex];
 
                 return new TooltipDisplayContent
                 {
